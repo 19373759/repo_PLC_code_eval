@@ -1,5 +1,4 @@
-from autoplc_scl.prompts import plan_gen_prompt
-from config import Config
+import prompt
 # from autoplc_scl.agents.clients import (
 #     autoplc_client_anthropic as client,
 #     BASE_MODEL as model
@@ -7,11 +6,37 @@ from config import Config
 import json
 import pytz
 from datetime import datetime
-from autoplc_scl.agents.clients import LLMClient, autoplc_client_anthropic
+from anthropic import Anthropic
+from openai import OpenAI
 from dotenv import load_dotenv
 import os
-from utils import PromptResultUtil
 
+import context
+import prompt
+load_dotenv()
+autoplc_client_anthropic = Anthropic(
+    base_url=os.getenv("BASE_URL"),
+    api_key=os.getenv("API_KEY")
+)
+
+autoplc_client_openai = OpenAI(
+    base_url=os.getenv("BASE_URL"),
+    api_key=os.getenv("API_KEY")
+)
+
+def read_jsonl(file_path):
+    """
+    Reads a JSON Lines file and returns a list of dictionaries.
+
+    Parameters:
+    file_path (str): The path to the JSON Lines file.
+
+    Returns:
+    list: A list of dictionaries representing the data in the file.
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return [json.loads(line) for line in f]
+    
 
 def fill_fewshot(natural_language_requirement, scl_code):
     return f"""
@@ -20,23 +45,44 @@ def fill_fewshot(natural_language_requirement, scl_code):
     代码：{scl_code}
     你需要根据自然语言需求生成能够为后续的代码生成提供指导的算法流程描述，并根据提供的代码流程进行适当调整。
     """    
+def project_struct_generate(common_context):
+    code_messages = [{"role": "system", "content":prompt.design_system_prompt}]
 
-def plan_gen(current_task_requirement, current_task_code):
-    
-    code_messages = [{"role": "system", "content":plan_gen_prompt.system_prompt_state_machine}]
-    
-    # fewshot_context1 = fill_fewshot(plan_gen_prompt.fewshot_prompt_req_1, plan_gen_prompt.fewshot_prompt_code_1)
-    # code_messages.append({"role": "user", "content": fewshot_context1})
-    # code_messages.append({"role": "assistant", "content": plan_gen_prompt.fewshot_prompt_plan_1})
-
-    natural_language_requirement = current_task_requirement
-    scl_code = current_task_code
+    natural_language_requirement = common_context.requirement
+    data_struct = common_context._data_structure
+    task_prompt = f"""
+    自然语言需求：{natural_language_requirement}
+    数据结构：{data_struct}
+    你需要根据自然语言需求和提供的数据结构用形式化语言描述项目结构。
+    """
 
     task_prompt = f"""
     自然语言需求：{natural_language_requirement}
+    数据结构：{data_struct}
+    项目结构：
+        -  前言：对于ST项目而言，它们的项目结构比较简单，往往几个文件就是一个完整的项目。下面将阐述具体的文件和对应的功能：
+        -  文件与模块：
+            - 数据结构与全局变量：  
+                从一个项目自底向上的角度来看，项目的最底层是数据结构和全局变量。数据结构伴随着需求一起提供，它包含了这个项目需要用到的特定的数据结构。
+                全局变量则是对项目中需要全局使用的一些变量的定义。例如，一个变量只需要在一个函数中使用，那它是一个局部变量应当定义在函数内部；如果它在多个流程中被使用，那么它就有必要被定义为一个全局变量。
+            - 函数块(FB / FUN)：
+                在 PLC 编程中，有函数块FB和函数FUN两个概念。
+                Function Block (FB) 和Function (FUN) 的核心区别在于状态保持
+                Function Block (FB) 有状态，内部变量可保存数据（如 PID 的积分项），需实例化（如myPID: FB_PID），适合需要记忆历史状态的控制逻辑（如 PID、计数器、状态机）；
+                Function (FUN) 无状态，纯计算单元输入相同则输出相同，可直接调用（如result := SQRT(value)），适合确定性数学运算（如三角函数、数据转换）。选择原则：逻辑需依赖历史数据用 FB，固定算法用 FUN。
+            - 程序块(PRG)：
+                程序块是最上层的块，它们可以调用函数块和函数，不同的程序块之间还可以互相调用实现更复杂的功能。
 
-    代码：{scl_code}
-    你需要根据自然语言需求生成能够为后续的代码生成提供指导的算法流程描述，并根据提供的代码流程进行适当调整。
+    你要严格遵循我给出的项目结构原则来设计，并将每个模块的需求描述详细写在每个模块内，以如下的形式给出：
+    <module>
+        "你对此模块的功能和需求描述"
+    <module_end>
+    <module>
+        "你对此模块的功能和需求描述"
+    <module_end>
+    <module>
+        "你对此模块的功能和需求描述"
+    <module_end>
     """
 
     code_messages.append({"role": "user", "content": task_prompt})
@@ -53,10 +99,10 @@ def plan_gen(current_task_requirement, current_task_code):
     )
     code_messages.append({"role": "assistant", "content":response.choices[0]['message']['content']})
     # print(code_messages)
-    str1 = PromptResultUtil.message_to_file_str(code_messages)
-    print(str1)
+    str1 = code_messages
 
     response = response.choices[0]['message']['content']
+    print(response)
     return response
 
 def is_st_machine(requirement_content):
@@ -91,68 +137,6 @@ def baseline_github(input_model, requirement_content):
     return response
 
 
-def gen_plan_dataset(case_requirement_dir, case_code_dir, case_plan_dir):
-    """
-    根据用例需求和代码生成计划数据集。
-
-    遍历需求目录下的所有文件，读取每个需求文件的内容，并尝试读取对应代码文件的内容（如果存在），
-    然后将两者作为输入生成一个计划，并将该计划写入计划目录下的相应文件中。
-
-    参数:
-    case_requirement_dir (str): 用例需求文件所在的目录路径。
-    case_code_dir (str): 用例代码文件所在的目录路径。
-    case_plan_dir (str): 生成的计划文件将要存放的目录路径。
-    """
-    #创建一个关于时间戳的文件夹
-    tz = pytz.timezone('Asia/Shanghai')
-    current_time = datetime.now(tz)
-    date_folder = current_time.strftime("%Y-%m-%d")
-    time_folder = current_time.strftime("%H-%M-%S")
-
-    base_folder = os.path.join(
-        case_plan_dir, f"{date_folder}_{time_folder}"
-    )
-    print(base_folder)
-    if not os.path.exists(base_folder):
-        os.makedirs(base_folder)
-    # 遍历需求目录及其子目录
-    for root, dirs, files in os.walk(case_requirement_dir):
-        files.sort()
-        for file in files:
-            # 构建需求文件的完整路径
-            requirement_file_path = os.path.join(root, file)
-
-            # 读取第一个目录下文件的内容
-            with open(requirement_file_path, 'r', encoding='utf-8') as req_file:
-                requirement_content = req_file.read()
-            # 获取文件名（不带后缀）
-            base_name = os.path.splitext(file)[0]
-            # 构建对应的.scl文件名
-            scl_file_name = base_name + '.scl'
-            print(scl_file_name)
-
-            # 构建第二个目录中对应的文件路径
-            code_file_path = os.path.join(case_code_dir, scl_file_name)
-            # 检查对应的代码文件是否存在
-            if os.path.exists(code_file_path):
-                # 读取第二个目录下对应文件的内容
-                with open(code_file_path, 'r', encoding='utf-8') as code_file:
-                    code_content = code_file.read()
-            else:
-                # 如果未找到对应的代码文件，打印提示信息并设置code_content为空字符串
-                print(f"在 {case_code_dir} 中未找到对应的文件: {file}")
-                code_content = ""
-
-            # 根据需求内容和代码内容生成计划
-            case_plan = plan_gen(requirement_content, code_content)
-            
-            # 将生成的计划内容写入计划文件
-            # 构建计划文件名和路径
-            plan_file_name = base_name + '.plan'
-            plan_file_path = os.path.join(base_folder, plan_file_name)
-            with open(plan_file_path, 'w', encoding='utf-8') as plan_file:
-                plan_file.write(case_plan)
-
 def figure_state_machine_in_lgf(dataset_file):
     with open(dataset_file, 'r', encoding='utf-8') as f:
         for line in f:
@@ -166,4 +150,42 @@ def run_baseline_in_github_case(model, dataset_file):
             json_data = json.loads(line.strip())
             st_res = baseline_github(model, line)
             print(json_data['name'], st_res + " ")
+
+def pre_func(dataset):
+    dataset_path = f"./mission/"
+    test_data = read_jsonl(dataset_path + f"{dataset}.jsonl")
+    return test_data
+
+def build_context(data):
+    import json
+
+# 原始JSON字符串（注意：实际使用时需确保字符串格式正确）
+
+    for json_str in data:
+        try:
+            ctx = context.CommonContext()
+            # 提取各字段
+            title = json_str.get('title', '')
+            description = json_str.get('description', '')
+            data_struct = json_str.get('data_struct', '')
+            
+            ctx._requirement = description
+            ctx._data_structure  = data_struct
+            
+            # 如需进一步处理description或data_struct，可以在这里进行
+            # 例如：解析data_struct中的结构体字段
+            return ctx
+                
+        except json.JSONDecodeError as e:
+            print(f"JSON解析错误: {e}")
+        except Exception as e:
+            print(f"其他错误: {e}")
+
+if __name__ == "__main__":
+    dataset = "task"
+    data = pre_func(dataset)
+    cont = build_context(data)
+    project_struct_generate(cont)
     
+    # project_struct_generate(data)
+    # project_struct_generate(dataset)      #首先生成项目结构

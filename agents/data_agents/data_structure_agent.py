@@ -73,15 +73,14 @@ def project_struct_generate(common_context):
             - 程序块(PRG)：
                 程序块是最上层的块，它们可以调用函数块和函数，不同的程序块之间还可以互相调用实现更复杂的功能。
 
-    你要严格遵循我给出的项目结构原则来设计，并将每个模块的需求描述详细写在每个模块内，以如下的形式给出.注意对于数据结构与全局变量模块，其标签为struct_module；对于函数块，其标签为FB_module；
-    对于函数，其标签为FUN_module；对于程序块，其标签为PRG_module：
-    <struct_module>
+    你要严格遵循我给出的项目结构原则来设计，并将每个模块的需求描述详细写在每个模块内，以如下的形式给出：
+    <module>
         "你对此模块的功能和需求描述"
     <module_end>
-    <FB_module>
+    <module>
         "你对此模块的功能和需求描述"
     <module_end>
-    <PRG_module>
+    <module>
         "你对此模块的功能和需求描述"
     <module_end>
     """
@@ -103,7 +102,7 @@ def project_struct_generate(common_context):
     str1 = code_messages
 
     response = response.choices[0]['message']['content']
-    # print(response)
+    print(response)
     return response
 
 def is_st_machine(requirement_content):
@@ -182,113 +181,16 @@ def build_context(data):
         except Exception as e:
             print(f"其他错误: {e}")
 
-def parse_modules(text):
-    """
-    解析文本中的模块标签内容，处理四种已知标签和未知标签
-    
-    参数:
-    text (str): 包含模块标签的文本
-    
-    返回:
-    dict: 包含四种模块内容和错误信息的字典
-    """
-    # 初始化结果列表和错误记录
-    struct_modules = []
-    fb_modules = []
-    fun_modules = []
-    prg_modules = []
-    unknown_modules = []
-    errors = []
-    
-    # 当前处理的模块类型和内容
-    current_module_type = None
-    current_content = []
-    line_number = 0
-    
-    # 标签类型映射
-    module_types = {
-        '<struct_module>': struct_modules,
-        '<FB_module>': fb_modules,
-        '<FUN_module>': fun_modules,
-        '<PRG_module>': prg_modules
-    }
-    
-    # 行处理
-    lines = text.split('\n')
-    for line in lines:
-        line_number += 1
-        stripped_line = line.strip()
-        
-        # 检查是否为开始标签
-        if stripped_line.startswith('<') and stripped_line.endswith('>'):
-            if stripped_line in module_types:
-                # 已知标签开始
-                if current_module_type:
-                    errors.append(f"行 {line_number}: 发现新标签 {stripped_line}，但上一个标签 {current_module_type} 未结束")
-                    # 保存不完整的内容到错误模块
-                    content = '\n'.join(current_content).strip('"')
-                    unknown_modules.append({
-                        'tag': current_module_type,
-                        'content': content,
-                        'error': '未找到结束标签'
-                    })
-                current_module_type = stripped_line
-                current_content = []
-            elif stripped_line == '<module_end>':
-                # 结束标签
-                if not current_module_type:
-                    errors.append(f"行 {line_number}: 发现结束标签，但没有对应的开始标签")
-                else:
-                    if current_content:
-                        # 合并内容并移除首尾引号
-                        content = '\n'.join(current_content).strip('"')
-                        module_types[current_module_type].append(content)
-                    current_module_type = None
-                    current_content = []
-            else:
-                # 未知标签
-                errors.append(f"行 {line_number}: 未知标签 {stripped_line}")
-                if current_module_type:
-                    # 保存不完整的内容到错误模块
-                    content = '\n'.join(current_content).strip('"')
-                    unknown_modules.append({
-                        'tag': current_module_type,
-                        'content': content,
-                        'error': f"被未知标签 {stripped_line} 中断"
-                    })
-                current_module_type = stripped_line
-                current_content = []
-        else:
-            # 普通内容行
-            if current_module_type:
-                current_content.append(line)
-    
-    # 检查是否有未结束的标签
-    if current_module_type:
-        errors.append(f"行 {line_number}: 标签 {current_module_type} 未找到结束标签")
-        content = '\n'.join(current_content).strip('"')
-        unknown_modules.append({
-            'tag': current_module_type,
-            'content': content,
-            'error': '未找到结束标签'
-        })
-    
-    return {
-        'struct_modules': struct_modules,
-        'fb_modules': fb_modules,
-        'fun_modules': fun_modules,
-        'prg_modules': prg_modules,
-        'unknown_modules': unknown_modules,
-        'errors': errors
-    }
-
 if __name__ == "__main__":
     dataset = "task"
     data = pre_func(dataset)
     cont = build_context(data)
-    modules = project_struct_generate(cont)  #生成项目结构
-    module_list = parse_modules(modules)
+    project_struct_generate(cont)
+    
+    # project_struct_generate(data)
+    # project_struct_generate(dataset)      #首先生成项目结构
 
 
+system_prompt = f"""
 
-    print(module_list)
+"""

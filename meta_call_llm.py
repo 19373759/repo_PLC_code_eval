@@ -10,6 +10,8 @@ from anthropic import Anthropic
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+from agents.data_agents import data_structure_agent
+from agents.func_agents import func_agent
 
 import context
 import prompt
@@ -288,7 +290,6 @@ if __name__ == "__main__":
     cont = build_context(data)
     modules = project_struct_generate(cont)  #生成项目结构
     module_list = parse_modules(modules)
-
-
-
-    print(module_list)
+    cont.modules = module_list
+    dut_blocks = data_structure_agent.module_generate(cont)
+    func_blocks = func_agent.module_generate(cont, dut_blocks)

@@ -5,6 +5,7 @@ class CommonContext:
         
         # 私有属性：已知的数据结构（字典类型，可存储任意结构）
         self.data_structure = {}
+        self.modules = {}
 
     def set_requirement(self, requirement: str) -> None:
         """设置需求描述"""

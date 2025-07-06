@@ -7,6 +7,8 @@ class CommonContext:
         self.data_structure = {}
         self.modules = {}
         self.title = ""
+        self.files = []
+        self.lack_names = []
 
     def set_requirement(self, requirement: str) -> None:
         """设置需求描述"""

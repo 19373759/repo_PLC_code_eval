@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 import os
 from agents.data_agents import data_structure_agent
 from agents.func_agents import func_agent
+from agents.program_agents import program_agent
+import dump_log
 
 import context
 import prompt
@@ -174,6 +176,7 @@ def build_context(data):
             
             ctx._requirement = description
             ctx._data_structure  = data_struct
+            ctx.title = title
             
             # 如需进一步处理description或data_struct，可以在这里进行
             # 例如：解析data_struct中的结构体字段
@@ -288,8 +291,20 @@ if __name__ == "__main__":
     dataset = "task"
     data = pre_func(dataset)
     cont = build_context(data)
+    
+    title = cont.title
+    dump = dump_log.dump_log()
+    dump.dumplog_init(title)
+
     modules = project_struct_generate(cont)  #生成项目结构
     module_list = parse_modules(modules)
     cont.modules = module_list
     dut_blocks = data_structure_agent.module_generate(cont)
     func_blocks = func_agent.module_generate(cont, dut_blocks)
+    program_blocks = program_agent.module_generate(cont, dut_blocks, func_blocks)
+    for dut in dut_blocks:
+        dump.dumplog_append(title, dut)
+    for fun in func_blocks:
+        dump.dumplog_append(title, fun)
+    for prg in program_blocks:
+        dump.dumplog_append(title, prg)

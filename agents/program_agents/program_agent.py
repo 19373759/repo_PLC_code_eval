@@ -45,15 +45,16 @@ def fill_fewshot(natural_language_requirement, scl_code):
     代码：{scl_code}
     你需要根据自然语言需求生成能够为后续的代码生成提供指导的算法流程描述，并根据提供的代码流程进行适当调整。
     """    
-def FBFUN_generate(common_context, fbfun_module, dut_blocks):
+def program_generate(common_context, prg_module , dut_blocks, fbfun_blocks):
     code_messages = [{"role": "system", "content":system_prompt}]
 
-    natural_language_requirement = fbfun_module
-    data_struct = common_context._data_structure
+    natural_language_requirement = prg_module
+
     task_prompt = f"""
     自然语言需求：{natural_language_requirement}
     数据结构：{dut_blocks}
-    请生成需求对应的FB/FUN块。注意：你要把DUT块以如下的形式呈现：
+    可能需要使用到的FB/FUN块：{fbfun_blocks}
+    请生成需求对应的PRG块。注意：你要把PRG块以如下的形式呈现：
     <dut_code>
         "你的实现"
     <code_end>
@@ -104,20 +105,16 @@ def extract_dut_code(text):
     # 提取标签间的内容
     content = text[start_after_tag:end_index].strip()
     return content
-def module_generate(common_context, dut_blocks):
+def module_generate(common_context, dut_blocks, func_blocks):
     modules = common_context.modules
-    FB_modules = modules["fb_modules"]
-    FUN_modules = modules["fun_modules"]
+    prg_modules = modules["prg_modules"]
 
-    FB_blocks = []
-    FUN_blocks = []
-    for FB_module in FB_modules:
-        FB_blocks.append(FBFUN_generate(common_context, FB_module, dut_blocks))
-    for FUN_module in FUN_modules:
-        FUN_blocks.append(FBFUN_generate(common_context, FUN_module, dut_blocks))
-    FUN_blocks += FB_blocks
-    print(FUN_blocks)
-    return FUN_blocks
+    prg_blocks = []
+    for prg_module in prg_modules:
+        prg_blocks.append(program_generate(common_context, prg_module, dut_blocks, func_blocks))
+    for block in prg_blocks:
+        print(prg_blocks)
+    return prg_blocks
 
 def is_st_machine(requirement_content):
     code_messages = [{"role": "system", "content":plan_gen_prompt.is_state_machine}]
@@ -196,12 +193,8 @@ def build_context(data):
             print(f"其他错误: {e}")
 
 system_prompt = f"""
-你是一个ST领域的FB/FUN块编写工程师，擅长根据提供的需求和数据结构块，定义实现FB/FUN块。FB/FUN块是CODESYS中的一个概念，你可以理解为PLC领域中的函数和函数块。下面是具体介绍：
-函数块(FB / FUN)：
-在 PLC 编程中，有函数块FB和函数FUN两个概念。他们的定位可以认为是通用编程语言中的函数，但是彼此之间有区别。
-Function Block (FB) 和Function (FUN) 的核心区别在于状态保持。
-Function Block (FB) 有状态，内部变量可保存数据（如 PID 的积分项），需实例化（如myPID: FB_PID），适合需要记忆历史状态的控制逻辑（如 PID、计数器、状态机）；
-Function (FUN) 无状态，纯计算单元输入相同则输出相同，可直接调用（如result := SQRT(value)），适合确定性数学运算（如三角函数、数据转换）。选择原则：逻辑需依赖历史数据用 FB，固定算法用 FUN。
-
-你要根据提供的需求给出完整的FB/FUN块的实现。
+你是一个ST领域的程序块(PRG)编写工程师，擅长根据提供的需求和数据结构块，定义实现PRG块。PRG块是CODESYS中的一个概念，你可以理解为PLC领域中具体调用FB/FUN的块。下面是具体介绍：
+程序块(PRG)：
+在 PLC 编程中，对于FB/FUN块，想要调用他们，需要通过程序块对他们进行调用。其形式像是传统编程语言中函数的调用方式。
+你要根据提供的需求给出完整的PRG块的实现。
 """

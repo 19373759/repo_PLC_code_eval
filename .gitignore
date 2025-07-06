@@ -2,3 +2,4 @@ myvenv/
 .env
 .gitignore
 __pycache__
+output

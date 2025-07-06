@@ -1,0 +1,303 @@
+['FUNCTION FUN_LinearInterpolation : REAL
+VAR_INPUT
+    rX1 : REAL;    // 第一个点的X坐标
+    rY1 : REAL;    // 第一个点的Y坐标
+    rX2 : REAL;    // 第二个点的X坐标
+    rY2 : REAL;    // 第二个点的Y坐标
+    rCurrentX : REAL; // 当前X值
+END_VAR
+
+VAR
+    rSlope : REAL; // 斜率
+    rIntercept : REAL; // 截距
+END_VAR
+
+// 计算斜率和截距
+rSlope := (rY2 - rY1) / (rX2 - rX1);
+rIntercept := rY1 - (rSlope * rX1);
+
+// 计算并返回插值结果
+FUN_LinearInterpolation := (rSlope * rCurrentX) + rIntercept;
+END_FUNCTION', 'TYPE DUT_CAMTABLE :
+STRUCT
+    // 10个点的XY坐标数组
+    aPointsX : ARRAY[1..10] OF REAL;
+    aPointsY : ARRAY[1..10] OF REAL;
+    
+    // 8个缩放参数
+    rScaleParam1 : REAL;
+    rScaleParam2 : REAL;
+    rScaleParam3 : REAL;
+    rScaleParam4 : REAL;
+    rScaleParam5 : REAL;
+    rScaleParam6 : REAL;
+    rScaleParam7 : REAL;
+    rScaleParam8 : REAL;
+    
+    // 编辑器范围参数
+    rEditorMinX : REAL;
+    rEditorMaxX : REAL;
+    rEditorMinY : REAL;
+    rEditorMaxY : REAL;
+    
+    // 实际表格范围参数
+    rTableMinX : REAL;
+    rTableMaxX : REAL;
+    rTableMinY : REAL;
+    rTableMaxY : REAL;
+END_STRUCT
+END_TYPE
+
+FUNCTION FUN_RangeMapping : REAL
+VAR_INPUT
+    rInputValue : REAL;         // 原始值
+    rSrcMin : REAL;             // 原始范围最小值
+    rSrcMax : REAL;             // 原始范围最大值
+    rDestMin : REAL;            // 目标范围最小值
+    rDestMax : REAL;            // 目标范围最大值
+END_VAR
+
+VAR
+    rNormalized : REAL;         //  归一化值
+    rOutputValue : REAL;        // 输出值
+END_VAR
+
+// 实现线性范围映射
+IF (rSrcMax <> rSrcMin) THEN
+    // 归一化到[0,1]范围
+    rNormalized := (rInputValue - rSrcMin) / (rSrcMax - rSrcMin);
+    
+    // 映射到目标范围
+    rOutputValue := rDestMin + rNormalized * (rDestMax - rDestMin);
+ELSE
+    // 防止除以零，返回目标范围中点
+    rOutputValue := (rDestMin + rDestMax) / 2.0;
+END_IF
+
+FUN_RangeMapping := rOutputValue;
+END_FUNCTION', 'TYPE DUT_CAMTABLE :
+STRUCT
+    // 10个点的XY坐标数组
+    aPointsX : ARRAY[1..10] OF REAL;
+    aPointsY : ARRAY[1..10] OF REAL;
+    
+    // 8个缩放参数
+    rScaleParam1 : REAL;
+    rScaleParam2 : REAL;
+    rScaleParam3 : REAL;
+    rScaleParam4 : REAL;
+    rScaleParam5 : REAL;
+    rScaleParam6 : REAL;
+    rScaleParam7 : REAL;
+    rScaleParam8 : REAL;
+    
+    // 编辑器范围参数
+    rEditorMinX : REAL;
+    rEditorMaxX : REAL;
+    rEditorMinY : REAL;
+    rEditorMaxY : REAL;
+    
+    // 实际表格范围参数
+    rTableMinX : REAL;
+    rTableMaxX : REAL;
+    rTableMinY : REAL;
+    rTableMaxY : REAL;
+END_STRUCT
+END_TYPE
+
+FUNCTION_BLOCK FB_CamTableProcessor
+VAR_INPUT
+    // 输入值
+    rInputValue : REAL;
+    // 凸轮表数据
+    stCamTable : DUT_CAMTABLE;
+    // 初始化请求
+    bInit : BOOL;
+END_VAR
+
+VAR_OUTPUT
+    // 计算结果
+    rOutputValue : REAL;
+    // 错误代码
+    iErrorCode : INT;
+    // 数据校验结果
+    bDataValid : BOOL;
+END_VAR
+
+VAR
+    // 当前激活的凸轮表索引
+    iActiveTableIndex : INT;
+    // 上 次计算结果
+    rLastOutputValue : REAL;
+    // 初始化完成标志
+    bInitialized : BOOL;
+END_VAR
+
+METHOD PRIVATE ValidateCamTableData : BOOL
+VAR_INPUT
+    stTable : DUT_CAMTABLE;
+END_VAR
+VAR
+    i : INT;
+    bValid : BOOL := TRUE;
+END_VAR
+
+// 检查X坐标是否单调递增
+FOR i := 1 TO 9 DO
+    IF stTable.aPointsX[i] >= stTable.aPointsX[i+1] THEN
+        bValid := FALSE;
+        EXIT;
+    END_IF
+END_FOR
+
+// 检查编辑器范围是否有效
+IF (stTable.rEditorMinX >= stTable.rEditorMaxX) OR 
+   (stTable.rEditorMinY >= stTable.rEditorMaxY) THEN
+    bValid := FALSE;
+END_IF
+
+// 检查实际表格范围是否有效
+IF (stTable.rTableMinX >= stTable.rTableMaxX) OR 
+   (stTable.rTableMinY >= stTable.rTableMaxY) THEN
+    bValid := FALSE;
+END_IF
+
+ValidateCamTableData := bValid;
+END_METHOD
+
+METHOD PRIVATE ScaleInputValue : REAL
+VAR_INPUT
+    rValue : REAL;
+    stTable : DUT_CAMTABLE;
+END_VAR
+VAR
+    rScaledValue : REAL;
+END_VAR
+
+// 将输入值从实际表格范围缩放到编辑器范围
+rScaledValue := (rValue - stTable.rTableMinX) * 
+                (stTable.rEditorMaxX - stTable.rEditorMinX) / 
+                (stTable.rTableMaxX - stTable.rTableMinX) + 
+                stTable.rEditorMinX;
+
+ScaleInputValue := rScaledValue;
+END_METHOD
+
+METHOD PRIVATE ScaleOutputValue : REAL
+VAR_INPUT
+    rValue : REAL;
+    stTable : DUT_CAMTABLE;
+END_VAR
+VAR
+    rScaledValue : REAL;
+END_VAR
+
+// 将输出值从编辑器范围缩放到实际表格范围
+rScaledValue := (rValue - stTable.rEditorMinY) * 
+                (stTable.rTableMaxY - stTable.rTableMinY) / 
+                (stTable.rEditorMaxY - stTable.rEditorMinY) + 
+                stTable.rTableMinY;
+
+ScaleOutputValue := rScaledValue;
+END_METHOD
+
+METHOD PRIVATE InterpolateValue : REAL
+VAR_INPUT
+    rInput : REAL;
+    stTable : DUT_CAMTABLE;
+END_VAR
+VAR
+    i : INT;
+    rX1, rX2, rY1, rY2 : REAL;
+    rResult : REAL;
+END_VAR
+
+// 查找输入值所在的区间
+FOR i := 1 TO 9 DO
+    IF (rInput >= stTable.aPointsX[i]) AND (rInput <= stTable.aPointsX[i+1]) THEN
+        rX1 := stTable.aPointsX[i];
+        rX2 := stTable.aPointsX[i+1];
+        rY1 := stTable.aPointsY[i];
+        rY2 := stTable.aPointsY[i+1];
+        
+        // 线性插值计算
+        rResult := rY1 + (rInput - rX1) * (rY2 - rY1) / (rX2 - rX1);
+        EXIT;
+    END_IF
+END_FOR
+
+// 处理超出范围的情况
+IF rInput < stTable.aPointsX[1] THEN
+    rResult := stTable.aPointsY[1];
+ELSIF rInput > stTable.aPointsX[10] THEN
+    rResult := stTable.aPointsY[10];
+END_IF
+
+InterpolateValue := rResult;
+END_METHOD
+
+// 主程序
+IF bInit THEN
+    // 初始化处理
+    bDataValid := ValidateCamTableData(stCamTable);
+    IF bDataValid THEN
+        bInitialized := TRUE;
+        iErrorCode := 0;
+    ELSE
+        bInitialized := FALSE;
+        iErrorCode := 1; // 数据无效错 误
+    END_IF
+END_IF
+
+IF bInitialized THEN
+    // 处理输入值
+    rOutputValue := ScaleOutputValue(
+        InterpolateValue(
+            ScaleInputValue(rInputValue, stCamTable),
+            stCamTable
+        ),
+        stCamTable
+    );
+    rLastOutputValue := rOutputValue;
+ELSE
+    // 未初始化时输出0
+    rOutputValue := 0;
+    iErrorCode := 2; // 未初始化错误
+END_IF
+END_FUNCTION_BLOCK', 'TYPE DUT_CAMTABLE :
+STRUCT
+    // 10个点的XY坐标数组
+    aPointsX : ARRAY[1..10] OF REAL;
+    aPointsY : ARRAY[1..10] OF REAL;
+    
+    // 8个缩放参数
+    rScaleParam1 : REAL;
+    rScaleParam2 : REAL;
+    rScaleParam3 : REAL;
+    rScaleParam4 : REAL;
+    rScaleParam5 : REAL;
+    rScaleParam6 : REAL;
+    rScaleParam7 : REAL;
+    rScaleParam8 : REAL;
+    
+    // 编辑器范围参数
+    rEditorMinX : REAL;
+    rEditorMaxX : REAL;
+    rEditorMinY : REAL;
+    rEditorMaxY : REAL;
+    
+    // 实际表格范围参数
+    rTableMinX : REAL;
+    rTableMaxX : REAL;
+    rTableMinY : REAL;
+    rTableMaxY : REAL;
+    
+    // 编辑历史记录（最多保存10次历史记录）
+    aHistory : ARRAY[0..9] OF DUT_CAMTABLE;
+    nHistoryIndex : INT;  // 当前历史记录索引
+    nHistoryCount : INT;  // 有效历史记录数量
+    
+    // 当前选中的点索引（0表示未选中）
+    nSelectedPoint : INT;
+END_STRUCT
+END_TYPE']

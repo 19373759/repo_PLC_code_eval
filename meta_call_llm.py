@@ -71,7 +71,7 @@ def project_struct_generate(common_context):
     code_messages = [{"role": "system", "content":prompt.struct_make_prompt}]
 
     files = common_context.files
-    names = common_context.names
+    names = common_context.lack_names
     names = ['FB_轴停止触发块', 'FB_轴控制块']
 #     task_prompt = f"""
 #     已知的项目文件内容：{files}
@@ -115,8 +115,8 @@ def project_struct_generate(common_context):
 # """
     task_prompt = f"""
     #     已知的项目文件内容：{files}
-    #     缺少的项目文件内容：{names}
-    #     你需要根据自然语言需求和提供的数据结构用形式化语言描述项目的依赖关系图谱，要从实际内容出发。如果你发现有个变量其类型没有在其他文件中给出，那么它就是一个缺失的依赖，你需要同样写在dependencies中。
+    #     缺少的项目文件名称：{names}
+    #     你需要根据自然语言需求和提供的数据结构用形式化语言描述项目的依赖关系图谱，要从实际内容出发。给出的缺少文件内容的列表是未被实现的文件名称。
     #     参考格式：
     #     {{
     #         "module": "DUT_Motor",
@@ -153,7 +153,7 @@ def project_struct_generate(common_context):
     #         - 程序块(PRG)：
     #             程序块是最上层的块，它们可以调用函数块和函数，不同的程序块之间还可以互相调用实现更复杂的功能。
     # """
-    
+
     code_messages.append({"role": "user", "content": task_prompt})
 
     #测试不同模型的生成效果
